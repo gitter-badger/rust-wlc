@@ -3,25 +3,16 @@
 #This is a script to verify that Rust code properly represents the
 #C functions that it represents
 
-import sys
 import re
 
-class Enumeration(object):
-    def __init__(self, names):
-        for number, name in enumerate(names.split()):
-            setattr(self, name, number)
-
-RED_TEXT = '\033[91m'
-GREEN_TEXT = '\033[92m'
-YELLOW_TEXT = '\033[93m'
-END_TEXT = '\033[0m'
+from utils import Enumeration, log, delete_comments
 
 RUST_TYPES = ("char bool "
         "i8 i16 i32 i16 i64 u8 u16 u32 u16 u64 isize usize f32 f64 "
         "Array Slice Str Tuple Function")
 
 # Types defined in Rust's libc crate, might want to get this dynamically
-C_TYPES = (" __fsword_t blkcnt64_t blkcnt_t blksize_t c_char c_double c_float "
+LIBC_TYPES = ("__fsword_t blkcnt64_t blkcnt_t blksize_t c_char c_double c_float "
            "c_int c_long c_longlong c_schar c_short c_uchar c_uint c_ulong "
            "c_ulonglong c_ushort cc_t clock_t dev_t fsblkcnt_t fsfilcnt_t "
            "gid_t in_addr_t in_port_t ino64_t ino_t int16_t int32_t int64_t "
@@ -32,19 +23,7 @@ C_TYPES = (" __fsword_t blkcnt64_t blkcnt_t blksize_t c_char c_double c_float "
            "uint64_t uint8_t uintmax_t uintptr_t useconds_t wchar_t")
 
 RustTypes = Enumeration(RUST_TYPES)
-CTypes = Enumeration(C_TYPES)
-
-def log(string, log_type):
-    log_type = log_type.lower().strip()
-    if log_type == "success":
-        color = GREEN_TEXT + "Success: "
-    elif log_type == "error":
-        color = RED_TEXT + "Error: "
-    elif log_type == "warning":
-        color = YELLOW_TEXT + "Warning: "
-    else:
-        raise ValueError("Bad log type {}".format(log_type))
-    sys.stderr.write(color + string + END_TEXT +  "\n")
+LibCTypes = Enumeration(LIBC_TYPES)
 
 
 class RustFunction:
@@ -53,26 +32,6 @@ class RustFunction:
         self.args = args
         self.output = output
 
-
-def delete_comments(lines: list) -> list:
-    """Deletes all the stuff that appears in comments.
-    If the comment is multiline, the lines are just not included"""
-    result = []
-    in_comment = False
-    for line in lines:
-        if in_comment:
-            end = line.find("*/")
-            if end == -1:
-                continue
-            result.append(line[end + len("*/"):])
-            in_comment = False
-            continue
-        comment_start = line.find("//")
-        if comment_start == -1:
-            result.append(line)
-        else:
-            result.append(line[:comment_start])
-    return result
 
 def extern_blocks(lines: list) -> list:
     """Returns the list of lines that are in extern blocks only"""
@@ -86,7 +45,6 @@ def extern_blocks(lines: list) -> list:
         if in_extern_block:
             result.append(line)
     return result
-
 
 def get_rust_functions(rust_file: str) -> list:
     """Returns a list of Rust functions found in the rust file.
@@ -122,7 +80,7 @@ def extract_function(line: str) -> RustFunction:
     # Get the input arguments first
     fn_start = re.search("fn.*\(", line)
     if fn_start is None:
-        raise BadFunctionException("Function does not start with 'fn'")
+        raise BadRustFunctionException("Function does not start with 'fn'")
     name = line[fn_start.start() + len("fn"): fn_start.end() - 1].strip()
     start = fn_start.end()
     end = re.search("\).*;", line).start()
@@ -137,7 +95,7 @@ def extract_function(line: str) -> RustFunction:
         start = arg.rfind(":")
         if start == -1:
             msg = "Input paramaters malformed: {}".format(arg)
-            raise BadFunctionException(msg)
+            raise BadRustFunctionException(msg)
         var_type = arg[start + 1:].replace("*mut", "").replace("*const", "").strip()
         arg_types.append(get_any_type(var_type))
     # Get the output type, if any
@@ -153,7 +111,6 @@ def extract_function(line: str) -> RustFunction:
                 .replace("*mut", "")
                 .strip())
         return_type = get_any_type(return_string)
-    log("Extracted function {}".format(line.strip()), "success")
     return RustFunction(name, arg_types, return_type)
 
 def get_any_type(var_type: str) -> str:
@@ -162,7 +119,7 @@ def get_any_type(var_type: str) -> str:
     found then a warning is logged, but the type is returned regardless"""
     # Check if a C Type
     try:
-        CTypes.__getattribute__(var_type)
+        LibCTypes.__getattribute__(var_type)
     except AttributeError:
         # Try again with Rust Types
         try:
@@ -174,13 +131,12 @@ def get_any_type(var_type: str) -> str:
                     "warning")
         except AttributeError:
             msg = "{} is not a proper Rust or libc type".format(var_type)
-            raise BadFunctionException(msg)
+            raise BadRustFunctionException(msg)
     return var_type
 
 
-class BadFunctionException(Exception):
+class BadRustFunctionException(Exception):
     pass
-
 
 
 if __name__ == "__main__":
@@ -189,5 +145,5 @@ if __name__ == "__main__":
     line = "fn output_set_sleep(output: uintptr_t, sleep: bool);"
     function = extract_function(line)
 
-    functions = get_rust_functions("handle.rs")
+    functions = get_rust_functions("../handle.rs")
 
