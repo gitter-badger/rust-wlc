@@ -51,7 +51,8 @@ def log(string, log_type):
 
 
 class RustFunction:
-    def __init__(self, args: list, output: Enumeration):
+    def __init__(self, name: str, args: list, output: Enumeration):
+        self.name = name
         self.args = args
         self.output = output
 
@@ -111,6 +112,7 @@ def extract_function(line: str) -> RustFunction:
     fn_start = re.search("fn.*\(", line)
     if fn_start is None:
         raise BadFunctionException("Function does not start with 'fn'")
+    name = line[fn_start.start() + len("fn"): fn_start.end() - 1].strip()
     start = fn_start.end()
     end = re.search("\).*;", line).start()
     args = line[start:end]
@@ -141,7 +143,7 @@ def extract_function(line: str) -> RustFunction:
                 .strip())
         return_type = get_any_type(return_string)
     log("Extracted function {}".format(line.strip()), "success")
-    return RustFunction(arg_types, return_type)
+    return RustFunction(name, arg_types, return_type)
 
 ### Don't like how the types work here, don't like returning a string
 ### The ad-hoc enum types are sort of to blame here, need something better
