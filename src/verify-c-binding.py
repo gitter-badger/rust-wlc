@@ -74,12 +74,28 @@ def delete_comments(lines: list) -> list:
             result.append(line[comment_start + len("//"):])
     return result
 
+def extern_blocks(lines: list) -> list:
+    """Returns the list of lines that are in extern blocks only"""
+    result = []
+    in_extern_block = False
+    for line in lines:
+        if not in_extern_block:
+            in_extern_block = bool(re.search("extern \"C\"\s*{", line.strip()))
+            continue
+        in_extern_block = not line.strip().endswith("}")
+        if in_extern_block:
+            result.append(line)
+    print("".join(result))
+    return result
+
+
 def get_rust_functions(rust_file: str) -> list:
     """Returns a list of Rust functions found in the rust file.
     If not found FileNotFoundError is thrown"""
     with open(rust_file, "r") as f:
         lines = f.readlines()
     lines = delete_comments(lines)
+    lines = extern_blocks(lines)
     functions = []
     for index in range(len(lines)):
         if " fn " not in lines[index] or not lines[index].strip():
