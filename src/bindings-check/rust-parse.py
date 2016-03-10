@@ -5,7 +5,7 @@
 
 import re
 
-from utils import Enumeration, log, delete_comments
+from utils import log, delete_comments
 
 RUST_TYPES = ("char bool "
         "i8 i16 i32 i16 i64 u8 u16 u32 u16 u64 isize usize f32 f64 "
@@ -22,12 +22,9 @@ LIBC_TYPES = ("__fsword_t blkcnt64_t blkcnt_t blksize_t c_char c_double c_float 
            "ssize_t suseconds_t tcflag_t time_t uid_t uint16_t uint32_t "
            "uint64_t uint8_t uintmax_t uintptr_t useconds_t wchar_t")
 
-RustTypes = Enumeration(RUST_TYPES)
-LibCTypes = Enumeration(LIBC_TYPES)
-
 
 class RustFunction:
-    def __init__(self, name: str, args: list, output: Enumeration):
+    def __init__(self, name: str, args: list, output: str):
         self.name = name
         self.args = args
         self.output = output
@@ -117,21 +114,18 @@ def get_any_type(var_type: str) -> str:
     """Returns either the type the str represents. C types are checked
     first, since they are more likely to be correct. If Rust type is
     found then a warning is logged, but the type is returned regardless"""
-    # Check if a C Type
-    try:
-        LibCTypes.__getattribute__(var_type)
-    except AttributeError:
-        # Try again with Rust Types
-        try:
-            if var_type == "()":
-                log("Using explicit -> (), can be removed", "warning")
-                return None
-            RustTypes.__getattribute__(var_type)
-            log("Using Rust type `{}` instead of a libc type".format(var_type),
+    if var_type in LIBC_TYPES:
+        pass
+    elif var_type == "()":
+        log("Using explicit -> (), can be removed", "warning")
+        var_type = None
+
+    elif var_type in RUST_TYPES:
+        log("Using Rust type `{}` instead of a libc type".format(var_type),
                     "warning")
-        except AttributeError:
-            msg = "{} is not a proper Rust or libc type".format(var_type)
-            raise BadRustFunctionException(msg)
+    else:
+        msg = "{} is not a proper Rust or libc type".format(var_type)
+        raise BadRustFunctionException(msg)
     return var_type
 
 
@@ -141,7 +135,6 @@ class BadRustFunctionException(Exception):
 
 if __name__ == "__main__":
     RUST_TYPES = RUST_TYPES + " Size Geometry ViewType ViewState"
-    RustTypes = Enumeration(RUST_TYPES)
     line = "fn output_set_sleep(output: uintptr_t, sleep: bool);"
     function = extract_function(line)
 

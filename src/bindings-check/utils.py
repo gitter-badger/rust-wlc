@@ -40,9 +40,3 @@ def delete_comments(lines: list) -> list:
         else:
             result.append(line[:comment_start])
     return result
-
-
-class Enumeration(object):
-    def __init__(self, names):
-        for number, name in enumerate(names.split()):
-            setattr(self, name, number)
