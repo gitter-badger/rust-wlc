@@ -3,13 +3,11 @@
 #This is a script to verify that Rust code properly represents the
 #C functions that it represents
 
-# Enumeration hack
-
 import sys
 import re
 
 class Enumeration(object):
-    def __init__(self, names):  # or *names, with no .split
+    def __init__(self, names):
         for number, name in enumerate(names.split()):
             setattr(self, name, number)
 
@@ -22,7 +20,7 @@ RUST_TYPES = ("char bool "
         "i8 i16 i32 i16 i64 u8 u16 u32 u16 u64 isize usize f32 f64 "
         "Array Slice Str Tuple Function")
 
-# Types defined in Rust's libc crate
+# Types defined in Rust's libc crate, might want to get this dynamically
 C_TYPES = (" __fsword_t blkcnt64_t blkcnt_t blksize_t c_char c_double c_float "
            "c_int c_long c_longlong c_schar c_short c_uchar c_uint c_ulong "
            "c_ulonglong c_ushort cc_t clock_t dev_t fsblkcnt_t fsfilcnt_t "
@@ -37,7 +35,6 @@ RustTypes = Enumeration(RUST_TYPES)
 CTypes = Enumeration(C_TYPES)
 
 def log(string, log_type):
-    # Defaults to warning
     log_type = log_type.lower().strip()
     if log_type == "success":
         color = GREEN_TEXT + "Success: "
@@ -83,7 +80,6 @@ def get_rust_functions(rust_file: str) -> list:
     with open(rust_file, "r") as f:
         lines = f.readlines()
     lines = delete_comments(lines)
-    # Gonna have to pass multple line probably
     functions = []
     for index in range(len(lines)):
         if " fn " not in lines[index] or not lines[index].strip():
@@ -91,8 +87,8 @@ def get_rust_functions(rust_file: str) -> list:
         start_index = end_index = index
         # Find the semi colon that is where the function declaration ends
         semicolon = lines[index].rfind(";")
-        # Might span multiple lines, keep searching until you find it
         is_def = False
+        # Might span multiple lines, keep searching until you find it
         while semicolon == -1:
             if lines[index].rfind("{") != -1 or not lines[index].strip():
                 is_def = True
@@ -116,7 +112,7 @@ def extract_function(line: str) -> RustFunction:
     start = fn_start.end()
     end = re.search("\).*;", line).start()
     args = line[start:end]
-    # Get types all we care about
+    # Get types, that is all we care about
     arg_types = []
     for arg in args.split(","):
         if not arg.strip():
@@ -145,19 +141,18 @@ def extract_function(line: str) -> RustFunction:
     log("Extracted function {}".format(line.strip()), "success")
     return RustFunction(name, arg_types, return_type)
 
-### Don't like how the types work here, don't like returning a string
-### The ad-hoc enum types are sort of to blame here, need something better
 def get_any_type(var_type: str) -> str:
     """Returns either the type the str represents. C types are checked
     first, since they are more likely to be correct. If Rust type is
     found then a warning is logged, but the type is returned regardless"""
+    # Check if a C Type
     try:
         CTypes.__getattribute__(var_type)
     except AttributeError:
         # Try again with Rust Types
         try:
-            # Don't like this, transition over from None to () as a type
             if var_type == "()":
+                log("Using explicit -> (), can be removed", "warning")
                 return None
             RustTypes.__getattribute__(var_type)
             log("Using Rust type `{}` instead of a libc type".format(var_type),
