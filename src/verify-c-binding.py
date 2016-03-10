@@ -71,7 +71,7 @@ def delete_comments(lines: list) -> list:
         if comment_start == -1:
             result.append(line)
         else:
-            result.append(line[comment_start + len("//"):])
+            result.append(line[:comment_start])
     return result
 
 def extern_blocks(lines: list) -> list:
@@ -85,7 +85,6 @@ def extern_blocks(lines: list) -> list:
         in_extern_block = not line.strip().endswith("}")
         if in_extern_block:
             result.append(line)
-    print("".join(result))
     return result
 
 
